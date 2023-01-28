@@ -1,0 +1,11 @@
+type Nested {
+    id: ID
+    nested: Nested
+    nesteds: [Nested]
+}
+
+type Query {
+    hi: String
+    hello(inputNum: Int): String
+    nested: Nested
+}
