@@ -31,10 +31,12 @@
   (prn :Nested/nesteds ctx batch-args)
   (map (fn [_] [{:id (random-uuid)} {:id (random-uuid)}]) batch-args))
 
-(def prepared-schema (-> "schema.graphqls"
-                         io/resource
-                         slurp
-                         build-prepared-schema))
+(def prepared-schema (->> (io/resource "schema")
+                          io/file
+                          file-seq
+                          (filter (fn [f] (.isFile f)))
+                          (map slurp)
+                          build-prepared-schema))
 
 (comment
   (printf

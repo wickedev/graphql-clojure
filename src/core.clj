@@ -6,12 +6,13 @@
            [com.google.gson GsonBuilder]
            [graphql GraphQL]
            [graphql ExecutionInput]
-           [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentationOptions]
            [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentation]
+           [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentationOptions]
            [graphql.schema DataFetcher]
            [graphql.schema.idl SchemaParser]
            [graphql.schema.idl RuntimeWiring]
            [graphql.schema.idl SchemaGenerator]
+           [graphql.schema.idl TypeDefinitionRegistry]
            [org.dataloader BatchLoaderWithContext]
            [org.dataloader BatchLoaderContextProvider]
            [org.dataloader DataLoaderRegistry]
@@ -217,13 +218,22 @@
                       datafetcher#
                       batchloader#))))))
 
-(defn build-prepared-schema [sdl]
+(defn merge-type-def-registry [type-def-registries]
+  (let [type-def-registry (TypeDefinitionRegistry.)]
+    (run! (fn [tdr]
+            (.merge type-def-registry tdr))
+          type-def-registries)
+    type-def-registry))
+
+(defn build-prepared-schema [schema-files]
   (let [parser (SchemaParser.)
-        type-def-registry (.parse parser sdl)
-        resolvers (-> type-def-registry
+        merged-type-def-registry (->> schema-files
+                                      (map (fn [sdl] (.parse parser sdl)))
+                                      merge-type-def-registry)
+        resolvers (-> merged-type-def-registry
                       type-def-registry->fields
                       build-resolvers)
-        schema (build-schema type-def-registry resolvers)]
+        schema (build-schema merged-type-def-registry resolvers)]
     {:schema schema
      :resolvers resolvers}))
 
@@ -233,7 +243,6 @@
         dispatcher-options (.. (DataLoaderDispatcherInstrumentationOptions/newOptions)
                                (includeStatistics true))
         loader-options  (.. (DataLoaderOptions/newOptions)
-                            (setCachingEnabled false)
                             (setBatchLoaderContextProvider context-provider))
         registry (build-dataloader-registry resolvers loader-options)
         dispatcher-instrumentation (DataLoaderDispatcherInstrumentation. dispatcher-options)
