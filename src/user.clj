@@ -22,9 +22,7 @@
                                          (get root field-name))))
                              (apply concat)
                              (group-by first))]
-    (-> group-by-author
-        (update-vals (fn [books]
-                       (map second books))))))
+    (update-vals group-by-author #(map second %))))
 
 (def authors (->entity data :authors))
 (def books-by-author (->reverse-entity data :books :authors))
