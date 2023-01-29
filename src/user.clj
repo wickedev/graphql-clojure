@@ -43,8 +43,8 @@
 (defresolver :Author/books
   {:batch {:parent [:id]}}
   [_ctx batch-args]
-  (->> (map :id batch-args)
-       (map #(get books-by-author %))))
+   (->> (map :id batch-args)
+        (map #(get books-by-author %))))
 
 (def prepared-schema (->> (io/resource "schema")
                           io/file
