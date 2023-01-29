@@ -37,37 +37,6 @@
 (def ^:private memoize-kebab-case->camelCase
   (memoize kebab-case->camelCase))
 
-(deftype ^:private UnaryOperatorWrapper [f]
-  java.util.function.UnaryOperator
-  (apply [_ v]
-    (f v)))
-
-(deftype ^:private BatchLoaderWithContextWrapper [f]
-  BatchLoaderWithContext
-  (load [_ keys ctx]
-    (f keys ctx)))
-
-(defrecord ^:private Resolver
-           [qualified-field
-            object-type
-            field
-            option
-            datafetcher
-            batchloader])
-
-(defn- make-batch-arg [{:keys [batch]} ctx args parent]
-  {:ctx (select-keys ctx (:ctx batch))
-   :args (select-keys args (:args batch))
-   :parent (select-keys parent (:parent batch))})
-
-(defn- ctx->m [ctx]
-  (->> (.iterator (.stream ctx))
-       iterator-seq
-       (map (fn [eset]
-              [(.getKey eset)
-               (.getValue eset)]))
-       (into {})))
-
 (defn keywordize-keys
   "Recursively transforms all map keys from camelCase strings to kebab-case keywords."
   [m]
@@ -92,6 +61,38 @@
               [k v]))]
     ;; only apply to maps
     (walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
+
+(deftype ^:private UnaryOperatorWrapper [f]
+  java.util.function.UnaryOperator
+  (apply [_ v]
+    (f v)))
+
+(deftype ^:private BatchLoaderWithContextWrapper [f]
+  BatchLoaderWithContext
+  (load [_ keys ctx]
+    (f keys ctx)))
+
+(defrecord ^:private Resolver
+           [qualified-field
+            object-type
+            field
+            option
+            datafetcher
+            batchloader])
+
+(defn- make-batch-arg [{:keys [batch]} ctx args parent]
+  (let [ctx' (select-keys ctx (:ctx batch))
+        args' (select-keys args (:args batch))
+        parent' (select-keys parent (:parent batch))]
+    (merge ctx' args' parent')))
+
+(defn- ctx->m [ctx]
+  (->> (.iterator (.stream ctx))
+       iterator-seq
+       (map (fn [eset]
+              [(.getKey eset)
+               (.getValue eset)]))
+       (into {})))
 
 (defn- jm->m [jm]
   (-> (jd/from-java jm)

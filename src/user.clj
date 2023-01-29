@@ -37,8 +37,7 @@
   "A book must have one or more authors."
   {:batch {:parent [:authors]}}
   [_ctx batch-args]
-  (->> batch-args
-       (map #(get-in % [:parent :authors]))
+  (->> (map :authors batch-args)
        (map (fn [author-ids]
               (map #(get authors %)
                    author-ids)))))
@@ -46,8 +45,7 @@
 (defresolver :Author/books
   {:batch {:parent [:id]}}
   [_ctx batch-args]
-  (->> batch-args
-       (map #(get-in % [:parent :id]))
+  (->> (map :id batch-args)
        (map #(get books-by-author %))))
 
 (def prepared-schema (->> (io/resource "schema")
