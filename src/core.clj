@@ -249,28 +249,29 @@
 
 (defn build-prepared-schema [schema-files]
   (let [parser (SchemaParser.)
+        dispatcher-options (.. (DataLoaderDispatcherInstrumentationOptions/newOptions)
+                               (includeStatistics true))
+        dispatcher-instrumentation  (DataLoaderDispatcherInstrumentation. dispatcher-options)
         merged-type-def-registry (->> schema-files
                                       (map (fn [sdl] (.parse parser sdl)))
                                       merge-type-def-registry)
         resolvers (-> merged-type-def-registry
                       type-def-registry->fields
                       build-resolvers)
-        schema (build-schema merged-type-def-registry resolvers)]
+        schema (build-schema merged-type-def-registry resolvers)
+        executable (.. (GraphQL/newGraphQL schema)
+                       (instrumentation dispatcher-instrumentation)
+                       build)]
     {:schema schema
+     :executable executable
      :resolvers resolvers}))
 
-(defn execute-query [{:keys [schema resolvers]} query ctx]
+(defn execute-query [{:keys [executable resolvers]} query ctx]
   (let [context-provider (reify BatchLoaderContextProvider
                            (getContext [_this] ctx))
-        dispatcher-options (.. (DataLoaderDispatcherInstrumentationOptions/newOptions)
-                               (includeStatistics true))
         loader-options  (.. (DataLoaderOptions/newOptions)
                             (setBatchLoaderContextProvider context-provider))
         registry (build-dataloader-registry resolvers loader-options)
-        dispatcher-instrumentation (DataLoaderDispatcherInstrumentation. dispatcher-options)
-        executable (.. (GraphQL/newGraphQL schema)
-                       (instrumentation dispatcher-instrumentation)
-                       build)
         input (.. (ExecutionInput/newExecutionInput)
                   (query query)
                   (dataLoaderRegistry registry)
