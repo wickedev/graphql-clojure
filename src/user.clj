@@ -1,35 +1,53 @@
 (ns user
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [criterium.core :as c]
             [core :refer [build-prepared-schema defresolver execute-query]]))
 
-(defresolver :Query/hello
-  {:batch {:args [:input-num]}}
-  [ctx batch-args]
-  (prn :Query/hello :ctx ctx :batch-args batch-args)
-  (map str batch-args))
+(def data (-> (io/resource "data.edn")
+              slurp
+              edn/read-string))
 
-(defresolver :Query/hi
-  [ctx args parent]
-  (prn :Query/hi :ctx ctx :args args :parent parent)
-  "greeting")
+(defn- ->entity
+  [data entity-name]
+  (->> (get data entity-name)
+       (reduce #(assoc %1 (:id %2) %2) {})))
 
-(defresolver :Query/nested
-  {:batch {}}
-  [ctx batch-args]
-  (prn :Query/nested ctx batch-args)
-  (map (fn [_] {:id (random-uuid)}) batch-args))
+(defn- ->reverse-entity
+  [data entity-name field-name]
+  (let [group-by-author (->> (get data entity-name)
+                             (map (fn [root]
+                                    (map (fn [field]
+                                           [field root])
+                                         (get root field-name))))
+                             (apply concat)
+                             (group-by first))]
+    (-> group-by-author
+        (update-vals (fn [books]
+                       (map second books))))))
 
-(defresolver :Nested/nested
+(def authors (->entity data :authors))
+(def books-by-author (->reverse-entity data :books :authors))
+
+(defresolver :Query/books
+  [_ctx _args _parent]
+  (:books data))
+
+(defresolver :Book/authors
+  {:batch {:parent [:authors]}}
+  [_ctx batch-args]
+  (->> batch-args
+       (map #(get-in % [:parent :authors]))
+       (map (fn [author-ids]
+              (map #(get authors %)
+                   author-ids)))))
+
+(defresolver :Author/books
   {:batch {:parent [:id]}}
-  [ctx batch-args]
-  (prn :Nested/nested ctx batch-args)
-  (map (fn [_] {:id (random-uuid)}) batch-args))
-
-(defresolver :Nested/nesteds
-  {:batch {:parent [:id]}}
-  [ctx batch-args]
-  (prn :Nested/nesteds ctx batch-args)
-  (map (fn [_] [{:id (random-uuid)} {:id (random-uuid)}]) batch-args))
+  [_ctx batch-args]
+  (->> batch-args
+       (map #(get-in % [:parent :id]))
+       (map #(get books-by-author %))))
 
 (def prepared-schema (->> (io/resource "schema")
                           io/file
@@ -38,38 +56,47 @@
                           (map slurp)
                           build-prepared-schema))
 
+(defn execute-sample-query []
+  (execute-query
+   prepared-schema
+   "query {
+      books {
+        ...BookFragment
+      }
+    }
+
+    fragment BookFragment on Book {
+      id
+      title
+     subject
+     published
+     authors {
+       ...AuthorFragment
+      }
+    }
+
+    fragment AuthorFragment on Author {
+      id
+      firstName
+      lastName
+      from
+      until
+      books {
+        ...AuthorBookFragment
+      }
+    }
+
+    fragment AuthorBookFragment on Book {
+      id
+      title
+      subject
+      published
+    }"
+   {:foo :bar}))
+
 (comment
-  (printf
-   (execute-query
-    prepared-schema
-    "query {
-      aHi: hi
-      bHi: hi
-      aHello: hello(inputNum: 1)
-      bHello: hello(inputNum: 2)
-      cHello: hello(inputNum: 2)
-      dHello: hello(inputNum: 2)
-   }"
-    {:foo 1}))
+  (c/with-progress-reporting
+    (c/bench (execute-sample-query)))
 
   (printf
-   (execute-query
-    prepared-schema
-    "query {
-      nested {
-        id
-        nested {
-          id
-        }
-        nesteds {
-          id
-          nested {
-            id
-            nested {
-              id
-            }
-          }
-        }
-      }
-    }"
-    {:bar 1})))
+   (execute-sample-query)))

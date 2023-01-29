@@ -23,14 +23,19 @@
                         setPrettyPrinting
                         create))
 
-(defn camelCase->kebab-case [s]
-  (if (string? s)
-    (.to CaseFormat/LOWER_CAMEL
-         CaseFormat/LOWER_HYPHEN s)
-    s))
+(defn- camelCase->kebab-case [s]
+  (.to CaseFormat/LOWER_CAMEL
+       CaseFormat/LOWER_HYPHEN s))
 
-(def memoize-camelCase->kebab-case
+(defn- kebab-case->camelCase [s]
+  (.to CaseFormat/LOWER_HYPHEN
+       CaseFormat/LOWER_CAMEL s))
+
+(def ^:private memoize-camelCase->kebab-case
   (memoize camelCase->kebab-case))
+
+(def ^:private memoize-kebab-case->camelCase
+  (memoize kebab-case->camelCase))
 
 (deftype ^:private UnaryOperatorWrapper [f]
   java.util.function.UnaryOperator
@@ -74,6 +79,20 @@
     ;; only apply to maps
     (walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
 
+
+(defn stringify-keys
+  "Recursively transforms all map keys from keywords to strings."
+  {:added "1.1"}
+  [m]
+  (let [f (fn [[k v]]
+            (if (keyword? k)
+              [(-> (name k)
+                   memoize-kebab-case->camelCase)
+               v]
+              [k v]))]
+    ;; only apply to maps
+    (walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
+
 (defn- jm->m [jm]
   (-> (j/from-java jm)
       keywordize-keys))
@@ -87,7 +106,7 @@
           parent (or (jm->m (.getSource env)) {})]
       (if (and dataloader (:batch option))
         (.load dataloader (make-batch-arg option ctx args parent))
-        (resolve-fn ctx args parent)))))
+        (stringify-keys (resolve-fn ctx args parent))))))
 
 (defmulti resolver
   {:arglists '([& more])}
@@ -207,7 +226,7 @@
                                                      (.getContext ctx#)
                                                      keys#)]
                                        (-> results#
-                                           walk/stringify-keys
+                                           stringify-keys
                                            resolve#))
                                      (catch Exception e#
                                        (reject# e#))))))))]
