@@ -1,5 +1,5 @@
 (ns core
-  (:require [clojure.java.data :as j]
+  (:require [clojure.java.data :as jd]
             [clojure.walk :as walk]
             [promesa.core :as p])
   (:import [com.google.common.base CaseFormat]
@@ -94,7 +94,7 @@
     (walk/postwalk (fn [x] (if (map? x) (into {} (map f x)) x)) m)))
 
 (defn- jm->m [jm]
-  (-> (j/from-java jm)
+  (-> (jd/from-java jm)
       keywordize-keys))
 
 (deftype ^:private DataFetcherWrapper [qualified-field option resolve-fn]
