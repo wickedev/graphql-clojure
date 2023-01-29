@@ -34,6 +34,7 @@
   (:books data))
 
 (defresolver :Book/authors
+  "A book must have one or more authors."
   {:batch {:parent [:authors]}}
   [_ctx batch-args]
   (->> batch-args

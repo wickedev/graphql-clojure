@@ -114,11 +114,14 @@
 
 (defmethod resolver :default [_] nil)
 
+(defn drop-nth [n coll]
+  (keep-indexed #(when (not= %1 n) %2) coll))
+
 (defn- parse-fdecl
   [fdecl]
   (let [;; if first fdecl is string? then drop docstring
-        fdecl                  (if (string? (first fdecl))
-                                 (next fdecl)
+        fdecl                  (if (string? (second fdecl))
+                                 (drop-nth 1 fdecl)
                                  fdecl)
         [qualified-field args] (if (keyword? (first fdecl))
                                  [(first fdecl) (rest fdecl)]
