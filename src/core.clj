@@ -1,7 +1,7 @@
 (ns core
-  (:require [util :as util]
-            [wrapper :as wrapper]
-            [promesa.core :as p])
+  (:require [promesa.core :as p]
+            [util :as util]
+            [wrapper :as wrapper])
   (:import [graphql GraphQL]
            [graphql ExecutionInput]
            [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentation]

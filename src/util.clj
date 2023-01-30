@@ -1,24 +1,8 @@
 (ns util
   (:require [clojure.java.data :as jd]
-            [clojure.walk :as walk]
-            [promesa.core :as p])
+            [clojure.walk :as walk])
   (:import [com.google.common.base CaseFormat]
-           [com.google.gson GsonBuilder]
-           [graphql GraphQL]
-           [graphql ExecutionInput]
-           [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentation]
-           [graphql.execution.instrumentation.dataloader DataLoaderDispatcherInstrumentationOptions]
-           [graphql.schema DataFetcher]
-           [graphql.schema.idl SchemaParser]
-           [graphql.schema.idl RuntimeWiring]
-           [graphql.schema TypeResolver]
-           [graphql.schema.idl SchemaGenerator]
-           [graphql.schema.idl TypeDefinitionRegistry]
-           [org.dataloader BatchLoaderWithContext]
-           [org.dataloader BatchLoaderContextProvider]
-           [org.dataloader DataLoaderRegistry]
-           [org.dataloader DataLoaderOptions]
-           [org.dataloader DataLoaderFactory]))
+           [com.google.gson GsonBuilder]))
 
 (def gson (.. (GsonBuilder.)
               setPrettyPrinting
