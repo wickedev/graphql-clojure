@@ -1,4 +1,8 @@
-type Author {
+interface Node {
+    id: ID!
+}
+
+type Author implements Node {
     id: ID!
     firstName: String!
     lastName: String!
@@ -9,7 +13,7 @@ type Author {
     books: [Book!]
 }
 
-type Book {
+type Book implements Node {
     id: ID!
     title: String!
     # A book must have one or more authors.

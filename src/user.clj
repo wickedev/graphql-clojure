@@ -1,8 +1,8 @@
 (ns user
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [criterium.core :as c]
-            [core :refer [build-prepared-schema defresolver execute-query]]))
+            [core :refer [build-prepared-schema defresolver execute-query]]
+            [criterium.core :as c]))
 
 (def data (-> (io/resource "data.edn")
               slurp
@@ -31,6 +31,12 @@
   [_ctx _args _parent]
   (:books data))
 
+(comment
+  (macroexpand-1
+   (defresolver :Query/books
+     [_ctx _args _parent]
+     (:books data))))
+
 (defresolver :Book/authors
   "A book must have one or more authors."
   {:batch {:parent [:authors]}}
@@ -43,8 +49,8 @@
 (defresolver :Author/books
   {:batch {:parent [:id]}}
   [_ctx batch-args]
-   (->> (map :id batch-args)
-        (map #(get books-by-author %))))
+  (->> (map :id batch-args)
+       (map #(get books-by-author %))))
 
 (def prepared-schema (->> (io/resource "schema")
                           io/file
