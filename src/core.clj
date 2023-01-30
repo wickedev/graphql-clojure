@@ -174,7 +174,7 @@
               (intersection-type-register!' object-type)
 
               graphql.language.UnionTypeDefinition
-              (prn "union")
+              (intersection-type-register!' object-type)
 
               graphql.language.ObjectTypeDefinition
               (object-type-register!' object-type)))
