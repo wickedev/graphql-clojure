@@ -1,7 +1,8 @@
 (ns user
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [core :refer [build-prepared-schema defresolver execute-query]]
+            [core :refer [build-prepared-schema defresolver execute-query
+                          tag-with-type]]
             [criterium.core :as c]))
 
 (def data (-> (io/resource "data.edn")
@@ -29,13 +30,9 @@
 
 (defresolver :Query/books
   [_ctx _args _parent]
-  (:books data))
-
-(comment
-  (macroexpand-1
-   (defresolver :Query/books
-     [_ctx _args _parent]
-     (:books data))))
+  (prn :args _args)
+  (->> (:books data)
+       (map #(tag-with-type % :Book))))
 
 (defresolver :Book/authors
   "A book must have one or more authors."
@@ -43,14 +40,17 @@
   [_ctx batch-args]
   (->> (map :authors batch-args)
        (map (fn [author-ids]
-              (map #(get authors %)
-                   author-ids)))))
+              (->> author-ids
+                   (map #(get authors %))
+                   (map #(tag-with-type % :Author)))))))
 
 (defresolver :Author/books
   {:batch {:parent [:id]}}
   [_ctx batch-args]
   (->> (map :id batch-args)
-       (map #(get books-by-author %))))
+       (map (fn [ids]
+              (->> (get books-by-author ids)
+                   (map #(tag-with-type % :Book)))))))
 
 (def prepared-schema (->> (io/resource "schema")
                           io/file
@@ -62,23 +62,30 @@
 (defn execute-sample-query []
   (execute-query
    prepared-schema
-   "query {
-      books {
+   "query Books($first: Int, $after: String, $direction: Direction) {
+      books(paging: {
+        first: $first
+        after: $after
+        direction: $direction
+      }) {
+        __typename
         ...BookFragment
       }
     }
 
     fragment BookFragment on Book {
+      __typename
       id
       title
-     subject
-     published
-     authors {
-       ...AuthorFragment
+      subject
+      published
+      authors {
+        ...AuthorFragment
       }
     }
-
+    
     fragment AuthorFragment on Author {
+      __typename
       id
       firstName
       lastName
@@ -90,12 +97,13 @@
     }
 
     fragment AuthorBookFragment on Book {
+      __typename
       id
       title
       subject
       published
     }"
-   {:foo :bar}))
+   {:foo :bar} {:first 10 :after nil :direction "DESC"}))
 
 (comment
   (c/with-progress-reporting

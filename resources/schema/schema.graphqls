@@ -23,6 +23,17 @@ type Book implements Node {
     subject: [String!]
 }
 
+enum Direction {
+    ASC
+    DESC
+}
+
+input Paging {
+    first: Int
+    after: String
+    direction: Direction
+}
+
 type Query {
-    books: [Book!]!
+    books(paging: Paging): [Book!]!
 }

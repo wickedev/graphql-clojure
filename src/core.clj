@@ -1,5 +1,6 @@
 (ns core
-  (:require [promesa.core :as p]
+  (:require [clojure.java.data :as jd]
+            [promesa.core :as p]
             [util :as util]
             [wrapper :as wrapper])
   (:import [graphql GraphQL]
@@ -20,6 +21,9 @@
   (fn [name & _more] name))
 
 (defmethod resolver :default [_] nil)
+
+(defn tag-with-type [entity type-tag]
+  (assoc entity :__typename (name type-tag)))
 
 (defn- parse-fdecl
   [fdecl]
@@ -79,10 +83,10 @@
                               batchloader#))))))
 
 (defn- object-type->resolvers [object-type]
-  (let [type (.getName object-type)]
+  (let [typename (.getName object-type)]
     (->> (.getFieldDefinitions object-type)
          (map #(.getName %))
-         (map #(str type "/" %))
+         (map #(str typename "/" %))
          (map (fn [qualified-field]
                 [qualified-field (resolver (keyword qualified-field))]))
          (filter #(second %)))))
@@ -94,6 +98,14 @@
 
 (defn- build-resolvers [object-types]
   (into {} (->> object-types
+                (filter (fn [t]
+                          (condp = (class t)
+                            graphql.language.UnionTypeDefinition false
+                            graphql.language.EnumTypeDefinition false
+                            graphql.language.InterfaceTypeDefinition true
+                            graphql.language.ObjectTypeDefinition true
+                            graphql.language.InputObjectTypeDefinition false
+                            :else true)))
                 (map object-type->resolvers)
                 (apply concat))))
 
@@ -125,15 +137,21 @@
     type-def-registry))
 
 (defn intersection-type-register!
-  [runtime-wiring-builder object-type]
+  [runtime-wiring-builder g-type]
   (.type
    runtime-wiring-builder
-   (.getName object-type)
+   (.getName g-type)
    (wrapper/->UnaryOperatorWrapper
     (fn [builder]
       (.typeResolver
        builder
-       (wrapper/->TypeResolverWrapper (fn [env] (prn env) env)))))))
+       (wrapper/->TypeResolverWrapper
+        (fn [env]
+          (let [obj  (.getObject env)
+                typename (get obj "__typename")]
+            (.. env
+                getSchema
+                (getObjectType typename))))))))))
 
 (defn field-type-register!
   [runtime-wiring-builder resolvers type-name field]
@@ -158,9 +176,9 @@
 
     (run! field-type!' fields)))
 
-(defn build-runtime [object-types]
+(defn build-runtime [g-types]
   (let [runtime-wiring-builder (RuntimeWiring/newRuntimeWiring)
-        resolvers (build-resolvers object-types)
+        resolvers (build-resolvers g-types)
         intersection-type-register!' (partial
                                       intersection-type-register!
                                       runtime-wiring-builder)
@@ -168,17 +186,23 @@
                                 object-type-register!
                                 runtime-wiring-builder
                                 resolvers)]
-    (run! (fn [object-type]
-            (condp = (type object-type)
+    (run! (fn [g-type]
+            (condp = (type g-type)
               graphql.language.InterfaceTypeDefinition
-              (intersection-type-register!' object-type)
+              (intersection-type-register!' g-type)
 
               graphql.language.UnionTypeDefinition
-              (intersection-type-register!' object-type)
+              (intersection-type-register!' g-type)
 
               graphql.language.ObjectTypeDefinition
-              (object-type-register!' object-type)))
-          object-types)
+              (object-type-register!' g-type)
+
+              graphql.language.EnumTypeDefinition
+              false
+
+              graphql.language.InputObjectTypeDefinition
+              false))
+          g-types)
     {:runtime-wiring (.build runtime-wiring-builder)
      :resolvers resolvers}))
 
@@ -190,8 +214,8 @@
         merged-type-def-registry (->> schema-files
                                       (map (fn [sdl] (.parse parser sdl)))
                                       merge-type-def-registry)
-        object-types (type-def-registry->object-types merged-type-def-registry)
-        {:keys [resolvers runtime-wiring]} (build-runtime object-types)
+        types (type-def-registry->object-types merged-type-def-registry)
+        {:keys [resolvers runtime-wiring]} (build-runtime types)
         schema (build-schema merged-type-def-registry runtime-wiring)
         executable (.. (GraphQL/newGraphQL schema)
                        (instrumentation dispatcher-instrumentation)
@@ -200,15 +224,17 @@
      :executable executable
      :resolvers resolvers}))
 
-(defn execute-query [{:keys [executable resolvers]} query ctx]
+(defn execute-query [{:keys [executable resolvers]} query ctx variables]
   (let [context-provider (reify BatchLoaderContextProvider
                            (getContext [_this] ctx))
         loader-options  (.. (DataLoaderOptions/newOptions)
                             (setBatchLoaderContextProvider context-provider))
         registry (build-dataloader-registry (vals resolvers) loader-options)
+        variables (jd/to-java java.util.Map (util/stringify-keys variables))
         input (.. (ExecutionInput/newExecutionInput)
                   (query query)
                   (dataLoaderRegistry registry)
+                  (variables variables)
                   (graphQLContext ctx)
                   build)
         result (.execute executable input)]
