@@ -112,4 +112,4 @@
     (c/bench (execute-sample-query {:first 10 :after nil :direction "DESC"})))
 
   (printf
-   (execute-sample-query {:first 1 :after nil :direction "DESC"})))
+   (execute-sample-query {:first 2 :after nil :direction "DESC"})))
