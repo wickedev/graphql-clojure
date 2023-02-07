@@ -29,10 +29,12 @@
 (def books-by-author (->reverse-entity data :books :authors))
 
 (defresolver :Query/books
-  [_ctx _args _parent]
-  (prn :args _args)
-  (->> (:books data)
-       (map #(tag-with-type % :Book))))
+  [_ctx {:keys [paging]} _parent]
+  (let [first (get paging "first" 10)]
+    (prn :first first)
+    (->> (:books data)
+         (take first)
+         (map #(tag-with-type % :Book)))))
 
 (defresolver :Book/authors
   "A book must have one or more authors."
@@ -59,7 +61,7 @@
                           (map slurp)
                           build-prepared-schema))
 
-(defn execute-sample-query []
+(defn execute-sample-query [variables]
   (execute-query
    prepared-schema
    "query Books($first: Int, $after: String, $direction: Direction) {
@@ -103,11 +105,11 @@
       subject
       published
     }"
-   {:foo :bar} {:first 10 :after nil :direction "DESC"}))
+   {:foo :bar} variables))
 
 (comment
   (c/with-progress-reporting
-    (c/bench (execute-sample-query)))
+    (c/bench (execute-sample-query {:first 10 :after nil :direction "DESC"})))
 
   (printf
-   (execute-sample-query)))
+   (execute-sample-query {:first 1 :after nil :direction "DESC"})))
